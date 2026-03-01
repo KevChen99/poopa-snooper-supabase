@@ -1,1 +1,1 @@
-SELECT * FROM violations
+delete from cameras
