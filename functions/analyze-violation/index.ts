@@ -17,6 +17,8 @@ const VIOLATION_PROMPTS: Record<string, string> = {
     "Analyze this video clip. Is there evidence of tailgating — someone following closely through a secured entrance without using their own credentials?",
   "Bad Delivery":
     "Analyze this video clip. Is there evidence of a delivery person leaving a package on the ground rather than handing it off or placing it in a secure/designated location?",
+  "Dog Violation":
+    "Analyze this video clip frame-by-frame to identify the presence of a living dog. Distinguish clearly between a real dog and toys, statues, or other animals (such as wolves or cats). If a dog is found, describe its actions, breed (if identifiable), and the environment. If no dog is found, describe the primary subjects of the video to confirm analysis was performed. Base your confidence score on visibility, lighting, and the duration of the dog's appearance in the clip.",
 };
 
 const RESPONSE_SCHEMA = {
