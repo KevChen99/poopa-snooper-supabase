@@ -19,6 +19,8 @@ const VIOLATION_PROMPTS: Record<string, string> = {
     "Analyze this video clip. Is there evidence of a delivery person leaving a package on the ground rather than handing it off or placing it in a secure/designated location?",
   "Dog Violation":
     "Analyze this video clip frame-by-frame to identify the presence of a living dog. Distinguish clearly between a real dog and toys, statues, or other animals (such as wolves or cats). If a dog is found, describe its actions, breed (if identifiable), and the environment. If no dog is found, describe the primary subjects of the video to confirm analysis was performed. Base your confidence score on visibility, lighting, and the duration of the dog's appearance in the clip.",
+  "Female":
+    "Analyze this video clip. Is there a person present in the footage? If so, what is their apparent gender, and what is their approximate age? Describe their appearance, actions, and location in the frame.",
 };
 
 const RESPONSE_SCHEMA = {
@@ -57,9 +59,10 @@ Deno.serve(async (req: Request) => {
   let camera_uuid: string;
   let violation_tag: string;
   let timestamp: string;
+  let org_id: string;
 
   try {
-    ({ clip_path, camera_uuid, violation_tag, timestamp } = await req.json());
+    ({ clip_path, camera_uuid, violation_tag, timestamp, org_id } = await req.json());
   } catch {
     return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
       status: 400,
@@ -67,10 +70,10 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  if (!clip_path || !camera_uuid || !violation_tag || !timestamp) {
+  if (!clip_path || !camera_uuid || !violation_tag || !timestamp || !org_id) {
     return new Response(
       JSON.stringify({
-        error: "Missing required fields: clip_path, camera_uuid, violation_tag, timestamp",
+        error: "Missing required fields: clip_path, camera_uuid, violation_tag, timestamp, org_id",
       }),
       { status: 400, headers: { "Content-Type": "application/json" } }
     );
@@ -208,6 +211,7 @@ Deno.serve(async (req: Request) => {
       clip_path,
       timestamp,
       status: "needs_review",
+      org_id,
     })
     .select()
     .single();
