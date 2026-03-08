@@ -61,7 +61,7 @@ BEGIN
       AND r.hierarchy_level <= _user.hierarchy_level
       AND r.deleted_at IS NULL;
 
-    _claims := event -> 'claims';
+    _claims := COALESCE(event -> 'claims', '{}'::JSONB);
     _claims := jsonb_set(_claims, '{user_id}',           to_jsonb(_user.id));
     _claims := jsonb_set(_claims, '{org_id}',            to_jsonb(_user.org_id));
     _claims := jsonb_set(_claims, '{role_id}',           to_jsonb(_user.role_id));
@@ -76,8 +76,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
--- Grant execute to supabase_auth_admin so the auth hook can call it
-GRANT EXECUTE ON FUNCTION public.custom_access_token_hook TO supabase_auth_admin;
+-- Restrict execution of the SECURITY DEFINER hook to the auth admin role
+REVOKE ALL PRIVILEGES ON FUNCTION public.custom_access_token_hook(JSONB) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.custom_access_token_hook(JSONB) TO supabase_auth_admin;
 
 -- The hook also needs to read from our tables
 GRANT SELECT ON TABLE public.users TO supabase_auth_admin;
