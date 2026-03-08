@@ -1,4 +1,5 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { AuthMiddleware } from "../_shared/auth.ts";
 
 /** Generate a URL-safe 32-byte random token. */
 function generateToken(): string {
@@ -10,7 +11,7 @@ function generateToken(): string {
     .replace(/=/g, "");
 }
 
-Deno.serve(async (req: Request) => {
+const handler = async (req: Request): Promise<Response> => {
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405,
@@ -18,16 +19,8 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  // Extract JWT from Authorization header
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return new Response(JSON.stringify({ error: "Missing authorization" }), {
-      status: 401,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
-  // Decode claims — Supabase already verified the JWT before calling the function
+  // JWT is cryptographically verified by AuthMiddleware — safe to decode claims
+  const authHeader = req.headers.get("Authorization")!;
   let claims: Record<string, unknown>;
   try {
     claims = JSON.parse(atob(authHeader.slice(7).split(".")[1]));
@@ -38,16 +31,17 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  const permissions = (claims.permissions as string[]) ?? [];
-  if (!claims.is_platform_admin && !permissions.includes("users:invite")) {
+  const isPlatformAdmin = claims.is_platform_admin === true;
+  const permissions = Array.isArray(claims.permissions) ? (claims.permissions as string[]) : [];
+  if (!isPlatformAdmin && !permissions.includes("users:invite")) {
     return new Response(JSON.stringify({ error: "Insufficient permissions" }), {
       status: 403,
       headers: { "Content-Type": "application/json" },
     });
   }
 
-  const orgId = claims.org_id as string;
-  const invitedById = claims.user_id as string;
+  const orgId = typeof claims.org_id === "string" ? claims.org_id : "";
+  const invitedById = typeof claims.user_id === "string" ? claims.user_id : "";
 
   if (!orgId || !invitedById) {
     return new Response(
@@ -156,4 +150,6 @@ Deno.serve(async (req: Request) => {
     JSON.stringify({ invite_id: invite.id, invite_url: inviteUrl, email }),
     { status: 200, headers: { "Content-Type": "application/json" } }
   );
-});
+};
+
+Deno.serve((req) => AuthMiddleware(req, handler));
