@@ -1,10 +1,26 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { hashToken } from "../_shared/crypto.ts";
+
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
+const JSON_HEADERS = {
+  "Content-Type": "application/json",
+  "Access-Control-Allow-Origin": "*",
+};
 
 Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 200, headers: CORS_HEADERS });
+  }
+
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405,
-      headers: { "Content-Type": "application/json" },
+      headers: JSON_HEADERS,
     });
   }
 
@@ -14,7 +30,7 @@ Deno.serve(async (req: Request) => {
   } catch {
     return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
       status: 400,
-      headers: { "Content-Type": "application/json" },
+      headers: JSON_HEADERS,
     });
   }
 
@@ -31,10 +47,11 @@ Deno.serve(async (req: Request) => {
   );
 
   // Step 1: Validate the invite token
+  const tokenHash = await hashToken(token);
   const { data: invites } = await supabase
     .from("invites")
     .select("*")
-    .eq("token", token)
+    .eq("token", tokenHash)
     .eq("status", "pending");
 
   if (!invites || invites.length === 0) {
@@ -84,7 +101,7 @@ Deno.serve(async (req: Request) => {
     .not("deleted_at", "is", null);
 
   for (const deletedUser of deletedUsers ?? []) {
-    const dummyEmail = `deleted_${Date.now()}_${email}`;
+    const dummyEmail = `deleted_${deletedUser.id}_${email}`;
     try {
       await supabase.auth.admin.updateUserById(deletedUser.auth_id, {
         email: dummyEmail,
