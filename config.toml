@@ -358,6 +358,9 @@ allow_dynamic_registration = false
 [functions.analyze-violation]
 verify_jwt = false
 
+[functions.accept-invite]
+verify_jwt = false
+
 [functions.generate-invite]
 verify_jwt = false
 

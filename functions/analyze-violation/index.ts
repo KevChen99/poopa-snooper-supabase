@@ -55,6 +55,19 @@ Deno.serve(async (req: Request) => {
     });
   }
 
+  // Shared secret auth for machine-to-machine calls (LMS backend).
+  // If EDGE_FUNCTION_SECRET is set, the caller must provide it as Bearer token.
+  const requiredSecret = Deno.env.get("EDGE_FUNCTION_SECRET");
+  if (requiredSecret) {
+    const provided = req.headers.get("Authorization")?.replace("Bearer ", "");
+    if (provided !== requiredSecret) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
+
   let clip_path: string;
   let camera_uuid: string;
   let violation_tag: string;

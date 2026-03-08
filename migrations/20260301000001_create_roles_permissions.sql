@@ -46,4 +46,5 @@ INSERT INTO permissions (key, description, category) VALUES
     ('roles:manage',         'Create/edit custom roles and permissions', 'roles'),
     ('org:settings',         'Manage organization settings',         'org'),
     ('audit:view',           'View audit logs',                      'audit'),
-    ('sessions:view',        'View active user sessions',            'sessions');
+    ('sessions:view',        'View active user sessions',            'sessions')
+ON CONFLICT (key) DO NOTHING;
