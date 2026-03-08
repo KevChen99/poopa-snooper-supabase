@@ -29,7 +29,16 @@ export async function AuthMiddleware(
   req: Request,
   next: (req: Request) => Promise<Response>,
 ): Promise<Response> {
-  if (req.method === "OPTIONS") return await next(req);
+  if (req.method === "OPTIONS") {
+    return new Response(null, {
+      status: 200,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      },
+    });
+  }
   try {
     const token = getAuthToken(req);
     const isValidJWT = await verifySupabaseJWT(token);

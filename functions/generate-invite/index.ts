@@ -1,5 +1,6 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { AuthMiddleware } from "../_shared/auth.ts";
+import { hashToken } from "../_shared/crypto.ts";
 
 /** Generate a URL-safe 32-byte random token. */
 function generateToken(): string {
@@ -11,11 +12,17 @@ function generateToken(): string {
     .replace(/=/g, "");
 }
 
+
+const JSON_HEADERS = {
+  "Content-Type": "application/json",
+  "Access-Control-Allow-Origin": "*",
+};
+
 const handler = async (req: Request): Promise<Response> => {
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405,
-      headers: { "Content-Type": "application/json" },
+      headers: JSON_HEADERS,
     });
   }
 
@@ -27,7 +34,7 @@ const handler = async (req: Request): Promise<Response> => {
   } catch {
     return new Response(JSON.stringify({ error: "Invalid token" }), {
       status: 401,
-      headers: { "Content-Type": "application/json" },
+      headers: JSON_HEADERS,
     });
   }
 
@@ -36,7 +43,7 @@ const handler = async (req: Request): Promise<Response> => {
   if (!isPlatformAdmin && !permissions.includes("users:invite")) {
     return new Response(JSON.stringify({ error: "Insufficient permissions" }), {
       status: 403,
-      headers: { "Content-Type": "application/json" },
+      headers: JSON_HEADERS,
     });
   }
 
@@ -56,7 +63,7 @@ const handler = async (req: Request): Promise<Response> => {
   } catch {
     return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
       status: 400,
-      headers: { "Content-Type": "application/json" },
+      headers: JSON_HEADERS,
     });
   }
 
@@ -113,6 +120,7 @@ const handler = async (req: Request): Promise<Response> => {
     .eq("status", "pending");
 
   const token = generateToken();
+  const tokenHash = await hashToken(token);
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
   const { data: invite, error: insertErr } = await supabase
@@ -121,7 +129,7 @@ const handler = async (req: Request): Promise<Response> => {
       org_id: orgId,
       email,
       role_id,
-      token,
+      token: tokenHash,
       invited_by: invitedById,
       expires_at: expiresAt,
     })
