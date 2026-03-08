@@ -101,11 +101,16 @@ ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 
 -- ── RLS Policies ─────────────────────────────────────────────────────────────
 
--- Organizations: users see their own org, platform admins see all
-CREATE POLICY org_isolation ON organizations
-    FOR ALL USING (
+-- Organizations: org members can read their own org; only platform admins can write
+CREATE POLICY org_isolation_read ON organizations
+    FOR SELECT USING (
         public.is_platform_admin() OR id = public.user_org_id()
     );
+
+CREATE POLICY org_isolation_write ON organizations
+    FOR INSERT, UPDATE, DELETE
+    USING (public.is_platform_admin())
+    WITH CHECK (public.is_platform_admin());
 
 -- Cameras: org-scoped read for org members; writes restricted to platform admins
 CREATE POLICY cameras_org_read ON cameras
@@ -113,14 +118,47 @@ CREATE POLICY cameras_org_read ON cameras
         public.is_platform_admin() OR org_id = public.user_org_id()
     );
 
-CREATE POLICY cameras_admin_write ON cameras
+CREATE POLICY cameras_org_write ON cameras
     FOR INSERT, UPDATE, DELETE
-    USING (public.is_platform_admin())
-    WITH CHECK (public.is_platform_admin());
--- Violations: org-scoped
-CREATE POLICY violations_org_isolation ON violations
-    FOR ALL USING (
-        public.is_platform_admin() OR org_id = public.user_org_id()
+    USING (
+        public.is_platform_admin()
+        OR (
+            org_id = public.user_org_id()
+            AND (current_setting('request.jwt.claims', true)::JSONB -> 'permissions') ? 'camera:manage'
+        )
+    )
+    WITH CHECK (
+        public.is_platform_admin()
+        OR (
+            org_id = public.user_org_id()
+            AND (current_setting('request.jwt.claims', true)::JSONB -> 'permissions') ? 'camera:manage'
+        )
+    );
+-- Violations: read requires violations:view, writes require violations:resolve
+CREATE POLICY violations_read ON violations
+    FOR SELECT USING (
+        public.is_platform_admin()
+        OR (
+            org_id = public.user_org_id()
+            AND (current_setting('request.jwt.claims', true)::JSONB -> 'permissions') ? 'violations:view'
+        )
+    );
+
+CREATE POLICY violations_write ON violations
+    FOR INSERT, UPDATE, DELETE
+    USING (
+        public.is_platform_admin()
+        OR (
+            org_id = public.user_org_id()
+            AND (current_setting('request.jwt.claims', true)::JSONB -> 'permissions') ? 'violations:resolve'
+        )
+    )
+    WITH CHECK (
+        public.is_platform_admin()
+        OR (
+            org_id = public.user_org_id()
+            AND (current_setting('request.jwt.claims', true)::JSONB -> 'permissions') ? 'violations:resolve'
+        )
     );
 
 -- Users: org-scoped read; restricted updates
@@ -129,13 +167,9 @@ CREATE POLICY users_select_org ON users
         public.is_platform_admin() OR org_id = public.user_org_id()
     );
 
-CREATE POLICY users_update_self_or_admin ON users
-    FOR UPDATE USING (
-        public.is_platform_admin() OR id = auth.uid()
-    )
-    WITH CHECK (
-        public.is_platform_admin() OR id = auth.uid()
-    );
+-- Users table: no direct writes from authenticated users.
+-- All mutations (role changes, soft-deletes, profile updates) go through
+-- edge functions that use the service_role key.
 -- Roles: org-scoped
 -- Org members can read roles in their org; platform admins can read all.
 CREATE POLICY roles_org_read ON roles
@@ -156,26 +190,30 @@ CREATE POLICY roles_admin_update ON roles
 CREATE POLICY roles_admin_delete ON roles
     FOR DELETE TO public
     USING (public.is_platform_admin());
--- Role Permissions: join through roles for org scoping
+-- Role Permissions: org-scoped read; writes restricted to platform admins or roles:manage
 CREATE POLICY rp_org_read ON role_permissions
     FOR SELECT USING (
         public.is_platform_admin()
         OR role_id IN (SELECT id FROM roles WHERE org_id = public.user_org_id())
     );
 
--- Only platform admins can create, update, or delete role_permissions.
-CREATE POLICY rp_admin_insert ON role_permissions
-    FOR INSERT TO public
-    WITH CHECK (public.is_platform_admin());
+CREATE POLICY rp_org_write ON role_permissions
+    FOR INSERT, UPDATE, DELETE
+    USING (
+        public.is_platform_admin()
+        OR (
+            role_id IN (SELECT id FROM roles WHERE org_id = public.user_org_id())
+            AND (current_setting('request.jwt.claims', true)::JSONB -> 'permissions') ? 'roles:manage'
+        )
+    )
+    WITH CHECK (
+        public.is_platform_admin()
+        OR (
+            role_id IN (SELECT id FROM roles WHERE org_id = public.user_org_id())
+            AND (current_setting('request.jwt.claims', true)::JSONB -> 'permissions') ? 'roles:manage'
+        )
+    );
 
-CREATE POLICY rp_admin_update ON role_permissions
-    FOR UPDATE TO public
-    USING (public.is_platform_admin())
-    WITH CHECK (public.is_platform_admin());
-
-CREATE POLICY rp_admin_delete ON role_permissions
-    FOR DELETE TO public
-    USING (public.is_platform_admin());
 -- Invites: org-scoped (read-only for org members; writes via backend/service_role)
 CREATE POLICY invites_org_isolation ON invites
     FOR SELECT USING (
