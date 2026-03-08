@@ -96,13 +96,21 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   // Block if active user with this email already exists in the org
-  const { data: activeUser } = await supabase
+  const { data: activeUser, error: activeUserErr } = await supabase
     .from("users")
     .select("id")
     .eq("email", email)
     .eq("org_id", orgId)
     .is("deleted_at", null)
     .maybeSingle();
+
+  if (activeUserErr) {
+    console.error("[generate-invite] active user lookup error:", activeUserErr);
+    return new Response(
+      JSON.stringify({ error: "Failed to check for existing user" }),
+      { status: 500, headers: JSON_HEADERS }
+    );
+  }
 
   if (activeUser) {
     return new Response(

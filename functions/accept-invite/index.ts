@@ -84,13 +84,21 @@ Deno.serve(async (req: Request) => {
   const { email, org_id, role_id } = invite;
 
   // Step 2: Check for active user collision
-  const { data: activeUser } = await supabase
+  const { data: activeUser, error: activeUserErr } = await supabase
     .from("users")
     .select("id")
     .eq("email", email)
     .eq("org_id", org_id)
     .is("deleted_at", null)
     .maybeSingle();
+
+  if (activeUserErr) {
+    console.error("[accept-invite] active user lookup error:", activeUserErr);
+    return new Response(
+      JSON.stringify({ error: "Failed to check for existing user" }),
+      { status: 500, headers: JSON_HEADERS }
+    );
+  }
 
   if (activeUser) {
     return new Response(

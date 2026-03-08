@@ -20,17 +20,17 @@ ON CONFLICT (id) DO NOTHING;
 
 -- ── Permission Assignments ───────────────────────────────────────────────────
 
--- Guard: view-only access
+-- Guard: view-only access + camera management (required for camera sync flow)
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT '00000000-0000-0000-0000-000000000010', id FROM permissions
-WHERE key IN ('camera:live_view', 'violations:view')
+WHERE key IN ('camera:live_view', 'camera:manage', 'violations:view')
 ON CONFLICT DO NOTHING;
 
 -- Senior Guard: Guard + configure cameras, resolve/export violations
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT '00000000-0000-0000-0000-000000000020', id FROM permissions
 WHERE key IN (
-    'camera:live_view', 'camera:configure',
+    'camera:live_view', 'camera:configure', 'camera:manage',
     'violations:view', 'violations:resolve', 'violations:export'
 )
 ON CONFLICT DO NOTHING;
