@@ -171,9 +171,11 @@ Deno.serve(async (req: Request) => {
 
   if (userInsertErr || !newUser) {
     console.error("[accept-invite] users insert error:", userInsertErr);
+    // Compensate: remove the orphaned auth user so the invite can be retried
+    await supabase.auth.admin.deleteUser(newAuthId);
     return new Response(
       JSON.stringify({ error: `Failed to create user: ${userInsertErr?.message}` }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      { status: 500, headers: JSON_HEADERS }
     );
   }
 
