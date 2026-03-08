@@ -39,7 +39,7 @@ BEGIN
            u.display_name, r.hierarchy_level, r.name AS role_name
     INTO _user
     FROM users u
-    JOIN roles r ON r.id = u.role_id
+    JOIN roles r ON r.id = u.role_id AND r.org_id = u.org_id
     JOIN organizations o ON o.id = u.org_id
     WHERE u.auth_id = _auth_id
       AND u.deleted_at IS NULL

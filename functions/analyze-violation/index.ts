@@ -72,10 +72,9 @@ Deno.serve(async (req: Request) => {
   let camera_uuid: string;
   let violation_tag: string;
   let timestamp: string;
-  let org_id: string;
 
   try {
-    ({ clip_path, camera_uuid, violation_tag, timestamp, org_id } = await req.json());
+    ({ clip_path, camera_uuid, violation_tag, timestamp } = await req.json());
   } catch {
     return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
       status: 400,
@@ -83,10 +82,10 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  if (!clip_path || !camera_uuid || !violation_tag || !timestamp || !org_id) {
+  if (!clip_path || !camera_uuid || !violation_tag || !timestamp) {
     return new Response(
       JSON.stringify({
-        error: "Missing required fields: clip_path, camera_uuid, violation_tag, timestamp, org_id",
+        error: "Missing required fields: clip_path, camera_uuid, violation_tag, timestamp",
       }),
       { status: 400, headers: { "Content-Type": "application/json" } }
     );
@@ -115,6 +114,22 @@ Deno.serve(async (req: Request) => {
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
+
+  // Derive org_id from the camera record — reject if camera doesn't exist
+  const { data: camera, error: cameraErr } = await supabase
+    .from("cameras")
+    .select("org_id")
+    .eq("id", camera_uuid)
+    .maybeSingle();
+
+  if (cameraErr || !camera) {
+    return new Response(
+      JSON.stringify({ error: `Camera not found: ${camera_uuid}` }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  const org_id: string = camera.org_id;
 
   // Download clip bytes from storage
   const { data: clipBlob, error: downloadErr } = await supabase.storage
