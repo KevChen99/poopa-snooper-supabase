@@ -48,12 +48,19 @@ Deno.serve(async (req: Request) => {
 
   // Step 1: Validate the invite token
   const tokenHash = await hashToken(token);
-  const { data: invites } = await supabase
+  const { data: invites, error: inviteError } = await supabase
     .from("invites")
     .select("*")
     .eq("token", tokenHash)
     .eq("status", "pending");
 
+  if (inviteError) {
+    console.error("Error fetching invite:", inviteError);
+    return new Response(
+      JSON.stringify({ error: "Internal server error" }),
+      { status: 500, headers: JSON_HEADERS }
+    );
+  }
   if (!invites || invites.length === 0) {
     return new Response(
       JSON.stringify({ error: "Invalid or expired invite token" }),

@@ -157,12 +157,25 @@ CREATE POLICY roles_admin_delete ON roles
     FOR DELETE TO public
     USING (public.is_platform_admin());
 -- Role Permissions: join through roles for org scoping
-CREATE POLICY rp_org_isolation ON role_permissions
-    FOR ALL USING (
+CREATE POLICY rp_org_read ON role_permissions
+    FOR SELECT USING (
         public.is_platform_admin()
         OR role_id IN (SELECT id FROM roles WHERE org_id = public.user_org_id())
     );
 
+-- Only platform admins can create, update, or delete role_permissions.
+CREATE POLICY rp_admin_insert ON role_permissions
+    FOR INSERT TO public
+    WITH CHECK (public.is_platform_admin());
+
+CREATE POLICY rp_admin_update ON role_permissions
+    FOR UPDATE TO public
+    USING (public.is_platform_admin())
+    WITH CHECK (public.is_platform_admin());
+
+CREATE POLICY rp_admin_delete ON role_permissions
+    FOR DELETE TO public
+    USING (public.is_platform_admin());
 -- Invites: org-scoped (read-only for org members; writes via backend/service_role)
 CREATE POLICY invites_org_isolation ON invites
     FOR SELECT USING (
