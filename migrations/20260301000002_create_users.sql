@@ -5,14 +5,18 @@
 CREATE TABLE users (
     id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     auth_id           UUID NOT NULL UNIQUE,
-    org_id            UUID NOT NULL REFERENCES organizations(id),
-    role_id           UUID NOT NULL REFERENCES roles(id),
+    org_id            UUID NOT NULL,
+    role_id           UUID NOT NULL,
     email             TEXT NOT NULL,
     display_name      TEXT NOT NULL DEFAULT '',
     is_platform_admin BOOLEAN NOT NULL DEFAULT FALSE,
     deleted_at        TIMESTAMPTZ,
     created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT users_org_fk
+        FOREIGN KEY (org_id) REFERENCES organizations(id),
+    CONSTRAINT users_org_role_fk
+        FOREIGN KEY (org_id, role_id) REFERENCES roles(org_id, id)
 );
 
 CREATE UNIQUE INDEX idx_users_org_email_active

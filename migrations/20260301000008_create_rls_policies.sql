@@ -74,7 +74,7 @@ BEGIN
     event := jsonb_set(event, '{claims}', _claims);
     RETURN event;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public;
 
 -- Restrict execution of the SECURITY DEFINER hook to the auth admin role
 REVOKE ALL PRIVILEGES ON FUNCTION public.custom_access_token_hook(JSONB) FROM PUBLIC;
@@ -107,30 +107,55 @@ CREATE POLICY org_isolation ON organizations
         public.is_platform_admin() OR id = public.user_org_id()
     );
 
--- Cameras: org-scoped
-CREATE POLICY cameras_org_isolation ON cameras
-    FOR ALL USING (
+-- Cameras: org-scoped read for org members; writes restricted to platform admins
+CREATE POLICY cameras_org_read ON cameras
+    FOR SELECT USING (
         public.is_platform_admin() OR org_id = public.user_org_id()
     );
 
+CREATE POLICY cameras_admin_write ON cameras
+    FOR INSERT, UPDATE, DELETE
+    USING (public.is_platform_admin())
+    WITH CHECK (public.is_platform_admin());
 -- Violations: org-scoped
 CREATE POLICY violations_org_isolation ON violations
     FOR ALL USING (
         public.is_platform_admin() OR org_id = public.user_org_id()
     );
 
--- Users: org-scoped
-CREATE POLICY users_org_isolation ON users
-    FOR ALL USING (
+-- Users: org-scoped read; restricted updates
+CREATE POLICY users_select_org ON users
+    FOR SELECT USING (
         public.is_platform_admin() OR org_id = public.user_org_id()
     );
 
+CREATE POLICY users_update_self_or_admin ON users
+    FOR UPDATE USING (
+        public.is_platform_admin() OR id = auth.uid()
+    )
+    WITH CHECK (
+        public.is_platform_admin() OR id = auth.uid()
+    );
 -- Roles: org-scoped
-CREATE POLICY roles_org_isolation ON roles
-    FOR ALL USING (
+-- Org members can read roles in their org; platform admins can read all.
+CREATE POLICY roles_org_read ON roles
+    FOR SELECT USING (
         public.is_platform_admin() OR org_id = public.user_org_id()
     );
 
+-- Only platform admins can create, update, or delete roles.
+CREATE POLICY roles_admin_manage ON roles
+    FOR INSERT TO public
+    WITH CHECK (public.is_platform_admin());
+
+CREATE POLICY roles_admin_update ON roles
+    FOR UPDATE TO public
+    USING (public.is_platform_admin())
+    WITH CHECK (public.is_platform_admin());
+
+CREATE POLICY roles_admin_delete ON roles
+    FOR DELETE TO public
+    USING (public.is_platform_admin());
 -- Role Permissions: join through roles for org scoping
 CREATE POLICY rp_org_isolation ON role_permissions
     FOR ALL USING (
@@ -138,9 +163,9 @@ CREATE POLICY rp_org_isolation ON role_permissions
         OR role_id IN (SELECT id FROM roles WHERE org_id = public.user_org_id())
     );
 
--- Invites: org-scoped
+-- Invites: org-scoped (read-only for org members; writes via backend/service_role)
 CREATE POLICY invites_org_isolation ON invites
-    FOR ALL USING (
+    FOR SELECT USING (
         public.is_platform_admin() OR org_id = public.user_org_id()
     );
 

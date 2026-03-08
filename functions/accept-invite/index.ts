@@ -103,13 +103,22 @@ Deno.serve(async (req: Request) => {
   for (const deletedUser of deletedUsers ?? []) {
     const dummyEmail = `deleted_${deletedUser.id}_${email}`;
     try {
-      await supabase.auth.admin.updateUserById(deletedUser.auth_id, {
-        email: dummyEmail,
-      });
+      const { error } = await supabase.auth.admin.updateUserById(
+        deletedUser.auth_id,
+        {
+          email: dummyEmail,
+        },
+      );
+      if (error) {
+        console.warn(
+          `[accept-invite] Failed to rename auth email for deleted user ${deletedUser.auth_id}:`,
+          error,
+        );
+      }
     } catch (err) {
       console.warn(
         `[accept-invite] Failed to rename auth email for deleted user ${deletedUser.auth_id}:`,
-        err
+        err,
       );
     }
   }
@@ -186,25 +195,31 @@ Deno.serve(async (req: Request) => {
     .eq("id", invite.id);
 
   // Step 8: Audit log (system action — no authenticated actor)
-  try {
-    await supabase.from("audit_logs").insert({
-      org_id,
-      actor_id: null,
-      action: "user.invite_accepted",
-      resource_type: "user",
-      resource_id: newUser.id,
-      details: {
-        actor_email: email,
-        actor_display_name: display_name || email,
-        actor_role_name: roleName,
-        invite_id: invite.id,
-        invited_by: invite.invited_by,
-      },
-      ip_address: req.headers.get("x-forwarded-for") ?? null,
-      user_agent: req.headers.get("user-agent") ?? null,
-    });
-  } catch (err) {
-    console.error("[accept-invite] audit log failed:", err);
+  const rawForwardedFor = req.headers.get("x-forwarded-for");
+  const ipAddress =
+    rawForwardedFor && rawForwardedFor.length > 0
+      ? rawForwardedFor.split(",")[0].trim() || null
+      : null;
+
+  const { error: auditErr } = await supabase.from("audit_logs").insert({
+    org_id,
+    actor_id: null,
+    action: "user.invite_accepted",
+    resource_type: "user",
+    resource_id: newUser.id,
+    details: {
+      actor_email: email,
+      actor_display_name: display_name || email,
+      actor_role_name: roleName,
+      invite_id: invite.id,
+      invited_by: invite.invited_by,
+    },
+    ip_address: ipAddress,
+    user_agent: req.headers.get("user-agent") ?? null,
+  });
+
+  if (auditErr) {
+    console.error("[accept-invite] audit log failed:", auditErr);
     // Non-fatal — don't fail the request
   }
 
