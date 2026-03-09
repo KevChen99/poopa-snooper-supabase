@@ -19,6 +19,8 @@ const VIOLATION_PROMPTS: Record<string, string> = {
     "Analyze this video clip. Is there evidence of a delivery person leaving a package on the ground rather than handing it off or placing it in a secure/designated location?",
   "Dog Violation":
     "Analyze this video clip frame-by-frame to identify the presence of a living dog. Distinguish clearly between a real dog and toys, statues, or other animals (such as wolves or cats). If a dog is found, describe its actions, breed (if identifiable), and the environment. If no dog is found, describe the primary subjects of the video to confirm analysis was performed. Base your confidence score on visibility, lighting, and the duration of the dog's appearance in the clip.",
+  "Female":
+    "Analyze this video clip. Is there a person present in the footage? If so, what is their apparent gender, and what is their approximate age? Describe their appearance, actions, and location in the frame.",
 };
 
 const RESPONSE_SCHEMA = {
@@ -51,6 +53,19 @@ Deno.serve(async (req: Request) => {
       status: 405,
       headers: { "Content-Type": "application/json" },
     });
+  }
+
+  // Shared secret auth for machine-to-machine calls (LMS backend).
+  // If EDGE_FUNCTION_SECRET is set, the caller must provide it as Bearer token.
+  const requiredSecret = Deno.env.get("EDGE_FUNCTION_SECRET");
+  if (requiredSecret) {
+    const provided = req.headers.get("Authorization")?.replace("Bearer ", "");
+    if (provided !== requiredSecret) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
   }
 
   let clip_path: string;
@@ -99,6 +114,22 @@ Deno.serve(async (req: Request) => {
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
+
+  // Derive org_id from the camera record — reject if camera doesn't exist
+  const { data: camera, error: cameraErr } = await supabase
+    .from("cameras")
+    .select("org_id")
+    .eq("id", camera_uuid)
+    .maybeSingle();
+
+  if (cameraErr || !camera) {
+    return new Response(
+      JSON.stringify({ error: `Camera not found: ${camera_uuid}` }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  const org_id: string = camera.org_id;
 
   // Download clip bytes from storage
   const { data: clipBlob, error: downloadErr } = await supabase.storage
@@ -208,6 +239,7 @@ Deno.serve(async (req: Request) => {
       clip_path,
       timestamp,
       status: "needs_review",
+      org_id,
     })
     .select()
     .single();
