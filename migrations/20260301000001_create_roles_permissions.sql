@@ -12,7 +12,8 @@ CREATE TABLE roles (
     deleted_at      TIMESTAMPTZ,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE(org_id, name)
+    UNIQUE(org_id, name),
+    UNIQUE(org_id, id)   -- required for composite FK from users table
 );
 
 CREATE INDEX idx_roles_org ON roles(org_id) WHERE deleted_at IS NULL;
