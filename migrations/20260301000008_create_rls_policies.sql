@@ -107,10 +107,18 @@ CREATE POLICY org_isolation_read ON organizations
         public.is_platform_admin() OR id = public.user_org_id()
     );
 
-CREATE POLICY org_isolation_write ON organizations
-    FOR INSERT, UPDATE, DELETE
+CREATE POLICY org_isolation_insert ON organizations
+    FOR INSERT
+    WITH CHECK (public.is_platform_admin());
+
+CREATE POLICY org_isolation_update ON organizations
+    FOR UPDATE
     USING (public.is_platform_admin())
     WITH CHECK (public.is_platform_admin());
+
+CREATE POLICY org_isolation_delete ON organizations
+    FOR DELETE
+    USING (public.is_platform_admin());
 
 -- Cameras: org-scoped read for org members; writes restricted to platform admins
 CREATE POLICY cameras_org_read ON cameras
@@ -118,8 +126,18 @@ CREATE POLICY cameras_org_read ON cameras
         public.is_platform_admin() OR org_id = public.user_org_id()
     );
 
-CREATE POLICY cameras_org_write ON cameras
-    FOR INSERT, UPDATE, DELETE
+CREATE POLICY cameras_org_insert ON cameras
+    FOR INSERT
+    WITH CHECK (
+        public.is_platform_admin()
+        OR (
+            org_id = public.user_org_id()
+            AND (current_setting('request.jwt.claims', true)::JSONB -> 'permissions') ? 'camera:manage'
+        )
+    );
+
+CREATE POLICY cameras_org_update ON cameras
+    FOR UPDATE
     USING (
         public.is_platform_admin()
         OR (
@@ -128,6 +146,16 @@ CREATE POLICY cameras_org_write ON cameras
         )
     )
     WITH CHECK (
+        public.is_platform_admin()
+        OR (
+            org_id = public.user_org_id()
+            AND (current_setting('request.jwt.claims', true)::JSONB -> 'permissions') ? 'camera:manage'
+        )
+    );
+
+CREATE POLICY cameras_org_delete ON cameras
+    FOR DELETE
+    USING (
         public.is_platform_admin()
         OR (
             org_id = public.user_org_id()
@@ -144,8 +172,18 @@ CREATE POLICY violations_read ON violations
         )
     );
 
-CREATE POLICY violations_write ON violations
-    FOR INSERT, UPDATE, DELETE
+CREATE POLICY violations_insert ON violations
+    FOR INSERT
+    WITH CHECK (
+        public.is_platform_admin()
+        OR (
+            org_id = public.user_org_id()
+            AND (current_setting('request.jwt.claims', true)::JSONB -> 'permissions') ? 'violations:resolve'
+        )
+    );
+
+CREATE POLICY violations_update ON violations
+    FOR UPDATE
     USING (
         public.is_platform_admin()
         OR (
@@ -154,6 +192,16 @@ CREATE POLICY violations_write ON violations
         )
     )
     WITH CHECK (
+        public.is_platform_admin()
+        OR (
+            org_id = public.user_org_id()
+            AND (current_setting('request.jwt.claims', true)::JSONB -> 'permissions') ? 'violations:resolve'
+        )
+    );
+
+CREATE POLICY violations_delete ON violations
+    FOR DELETE
+    USING (
         public.is_platform_admin()
         OR (
             org_id = public.user_org_id()
@@ -197,8 +245,18 @@ CREATE POLICY rp_org_read ON role_permissions
         OR role_id IN (SELECT id FROM roles WHERE org_id = public.user_org_id())
     );
 
-CREATE POLICY rp_org_write ON role_permissions
-    FOR INSERT, UPDATE, DELETE
+CREATE POLICY rp_org_insert ON role_permissions
+    FOR INSERT
+    WITH CHECK (
+        public.is_platform_admin()
+        OR (
+            role_id IN (SELECT id FROM roles WHERE org_id = public.user_org_id())
+            AND (current_setting('request.jwt.claims', true)::JSONB -> 'permissions') ? 'roles:manage'
+        )
+    );
+
+CREATE POLICY rp_org_update ON role_permissions
+    FOR UPDATE
     USING (
         public.is_platform_admin()
         OR (
@@ -207,6 +265,16 @@ CREATE POLICY rp_org_write ON role_permissions
         )
     )
     WITH CHECK (
+        public.is_platform_admin()
+        OR (
+            role_id IN (SELECT id FROM roles WHERE org_id = public.user_org_id())
+            AND (current_setting('request.jwt.claims', true)::JSONB -> 'permissions') ? 'roles:manage'
+        )
+    );
+
+CREATE POLICY rp_org_delete ON role_permissions
+    FOR DELETE
+    USING (
         public.is_platform_admin()
         OR (
             role_id IN (SELECT id FROM roles WHERE org_id = public.user_org_id())
